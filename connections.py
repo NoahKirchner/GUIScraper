@@ -8,7 +8,7 @@ agentgen = shadow_useragent.ShadowUserAgent()
 
 
 # Feed this a session object created via the requests module, a url and a timeout variable
-# if you'd like to change it. @Todo logging
+# if you'd like to change it.
 def connect(session:requests.Session(), url:str, timeout: int = 5):
     start = t.perf_counter()
     session = session
@@ -23,7 +23,7 @@ def connect(session:requests.Session(), url:str, timeout: int = 5):
 # to complete and then the raw output from the request itself (AKA the website content)
 
 
-# Input the number of useragents to generate. @Todo logging
+# Input the number of useragents to generate.
 def genuser(number:int):
     useragent = agentgen
     useragent_list = []
@@ -33,7 +33,7 @@ def genuser(number:int):
 # Returns a list of randomly selected non-mobile useragents based on the input number.
 
 
-# Feed this a number of free proxies to generate. @Todo logging, investigate why protocol not work
+# Feed this a number of free proxies to generate.
 def genproxy(number:int):
     collector = ps.get_collector(name='ProxyGen')
     collector.refresh_proxies()

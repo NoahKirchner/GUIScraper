@@ -7,7 +7,6 @@ from time import sleep, perf_counter
 import numpy as np
 
 
-
 # Executor class is basically just the class you use to multithread the connections
 # from connections.py. I mean I probably could've put connections.py in here but
 # compartmentalizing makes my monkey brain feel nice so here we are.
@@ -15,7 +14,6 @@ class Executor:
 
     # Initialization, sets up variables that will be used throughout the class
     # based on number of threads/sessions to create & protocol (http, https, socks4, socks5)
-    # @Todo logging & delete this ugly extra comment line
     def __init__(self, number:int, timeout:int = 5, delay:int = 1):
         self.number = number
         self.timeout = timeout
@@ -35,7 +33,7 @@ class Executor:
     # Calls the connect function from connect.py on a range of URLs instead of just one.
     # Requires a numerical range (generated in run from the list of URLs) and the
     # list of URLs itself, as well as a session to assign to the thread and the
-    # output queue. @Todo logging
+    # output queue.
     def rangeconnect(self, inputlist:list, rangelist:list, session: requests.Session(), guiqueue:Queue):
         for i in rangelist:
             try:
@@ -51,7 +49,7 @@ class Executor:
     # This method creates a number of threads equal to the number of sessions/arg passed
     # when the class was created. On each of those threads, it then calls the above
     # function but with a unique session (proxy and user-agent data) that is generated
-    # upon class initialization. @Todo logging
+    # upon class initialization.
     def run(self, inputlist:list, guiqueue:Queue):
         ranges = np.arange(len(inputlist))
         ranges = np.array_split(ranges,self.number)

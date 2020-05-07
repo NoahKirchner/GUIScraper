@@ -1,22 +1,43 @@
-import handling, connections, executor, parser
+import handling, connections, executor, modparser
 import PySimpleGUI as sg
 from threading import Thread
 from queue import *
 from time import sleep
 
+#Todo relative to whole project
+# Add some form of .txt logging for ease of debugging when the meat and potatos are done
+# There's a lot of different structures being passed around, a combination of list,
+# dict and tuples. See if you can combine all of those to tuples if you can.
 
 # You know where you are? You're in the jungle, baby! You're gonna die!
 
-
-
-
+# @Todo This is incomprehensible spaghetti, add some comments PLEASE GOD -past me
+# This is painful, but here we are. This function contains everything required
+# To create the gui and implements all the dependencies listed above. The reason
+# it's in a function is because that allows the program to be multithreaded, which
+# is the only way to get the print output inside of the gui. Also prevents it from
+# Not responding while a blocking activity is taking place, like when you start scraping.
 def gui():
+    # Variables and what they do @Todo convert everything to hump case or whatever the _ one is
+    # Theme
     sg.theme('DarkAmber')
+    # Reference to the active executor since it needs to be used multiple times.
     activeExecutor = None
+    # URL input list.
     inputList = None
+    # Bruh I don't remember @Todo remove this if it's not important
     grabbable = False
+    # The queue that the executor sessions use to send data back to the GUI thread
     guiqueue = Queue()
+    # List of data to parse, format [(URL, content)]
+    parselist = []
+    # The trimmed display output by modparser normalization method
+    # @Todo see if this can be removed by using return values
+    trimdisplay = []
 
+    # Yarr, page layouts be here
+    # @Todo reformat these so they're easier to look through
+    # Page to construct the URL list.
     inputlayout = [
         [sg.T('Use this tab to create or input your URL list.')],
         [
@@ -46,6 +67,7 @@ def gui():
 
     ]
 
+    # Page to construct the executor class (# of threads, universal delay, timeout etc)
     connectionlayout = [
         [sg.T('Initialize and manage your connections here.')],
         [sg.Frame(element_justification='left',
@@ -72,34 +94,78 @@ def gui():
                 [sg.Multiline(key='headeroutput', do_not_clear=False, size=(56, 6))]])]
 
     ]
+
+    # Where to execute the scraping based on the constructed executor class & list of URLs.
+    # Also has the ability to import pickled list data
     scrapelayout = [
-        [sg.T('Scrape the data. (This might stop responding, but it is still working!)')],
+        [sg.T('Scrape data from a list of URLs or import previously scraped data')],
         [sg.Frame(element_justification='right',
                   title='Scraping Progress', layout=[
-                [sg.Button('Scrape', key='scrape',
+                [sg.InputText(size=(31, 1), key='picklein'),
+                 sg.FileBrowse('Browse'),
+                 sg.Button('Import', key='pickleimport'),
+                 sg.VerticalSeparator(),
+                 sg.Button('Scrape', key='scrape',
                            tooltip='Begins scraping!')],
-                [sg.Output(key='scrapeout', size=(55, 17))]]
+                [sg.Output(key='scrapeout', size=(55, 17))],
+                [sg.InputText(size=(24, 1), key='pickleout'),
+                sg.InputText(size=(15, 1), key='picklename'),
+                 sg.FolderBrowse('Browse', target='pickleout'),
+                 sg.Button('Export', key='pickleexport')]]
                   )
          ]
     ]
+
+    # Where you go to trim the data to make it more human readable later during parsing.
+    # Basically just selecting a parse_only= value in a beautifulsoup object lol
+    trimlayout = [
+        [sg.T('Trim down the page to a more manageable size.')],
+        [sg.Frame(title='Trimming', layout=[
+            [sg.Button('Update Layout', key='genlayout'),
+             sg.Spin([i for i in range(30)], initial_value=0, text_color='black',
+                     background_color='white', key='childrow',
+                     tooltip='How many element children do you want to see? Keep at 0 for all.'),
+             sg.InputText(size=(39, 1), key='selected')],
+            [sg.Button('Update Selection', key='upselection')],
+             [sg.Listbox(values=trimdisplay, key='trimselection', size=(56,16))
+             ]
+
+
+
+
+        ])]
+    ]
+
+    # @Todo parsing the trimmed data from above
     parselayout = [
         [sg.T('Choose what information you are going to parse.')]
     ]
+
+    # @Todo decide the format by which the parsed data is displayed.
     outputlayout = [
         [sg.T('Select the format you would like to export your scraped information as.')]
     ]
+
+    # Aggregate all above layouts into one master page.
     masterlayout = [
         [sg.Button('Exit', tooltip='Bye! :)')],
         [sg.TabGroup([[sg.Tab('Input', inputlayout), sg.Tab('Connections', connectionlayout),
-                       sg.Tab('Scraping', scrapelayout),
+                       sg.Tab('Scraping', scrapelayout), sg.Tab('Trimming', trimlayout),
                        sg.Tab('Parsing', parselayout), sg.Tab('Output', outputlayout)]])],
 
     ]
+    # End of page layouts
 
+    # Initialize window
+    # @Todo toggleable grab_anywhere
     window = sg.Window('Scraper GUI', masterlayout,
                        no_titlebar=True, grab_anywhere=grabbable, keep_on_top=True)
+    # Event loop
     while True:
         event, values = window.read()
+
+        # If the stage URL button is hit, and using the input/baseURL & row # on the GUI
+        # @Todo this can probably be made more concise.
         if event == 'stageurl':
             if len(values['csv']) == 0:
                 window['urloutput'].print('You need to import a CSV first.')
@@ -121,7 +187,11 @@ def gui():
                             window['urloutput'].print(url)
                     except FileNotFoundError:
                         window['urloutput'].print('File not found.')
+        # Generate a list of URLs to iterate through, either by pulling that
+        # information directly from a CSV or by appending page extensions
+        # listed in a CSV onto a base URL.
 
+        # If executor staging button is hit and using the inputs on the page.
         if event == 'executor':
             activeExecutor = executor.Executor(int(values['number']),
                                                values['timeout'], values['delay'])
@@ -131,6 +201,12 @@ def gui():
                 window['proxyoutput'].print('Proxy IP: {}:{}, \n'.format(proxyinfo[0],
                                                                          proxyinfo[1]))
                 window['headeroutput'].print('User-Agent: {}, \n'.format(agentinfo))
+        # Generate the sessions as you can see in executor.py, and also print out
+        # that information so it's nice and purdy.
+
+        # This one is a doozy. When scrape is hit, create a thread to run the executor
+        # and begin scraping. This is to keep the gui window from not responding, and
+        # also allows printouts.
         if event == 'scrape':
             thread = Thread(target=activeExecutor.run, args=(inputList, guiqueue), daemon=True)
             thread.start()
@@ -140,9 +216,56 @@ def gui():
                 message = None
             if message:
                 window.read()
+        # Put all of the output into the guiqueue
+        #Todo you need to extract this data using handling at some point, remember
+        # to do that.
+
+        # When pickleimport button is hit
+        if event == 'pickleimport':
+            try:
+                parselist = handling.unpickle(values['picklein'])
+                print('Previously scraped data imported from {}, total'
+                      ' number of pages imported is {}.'.format(values['picklein'], len(parselist)))
+            except FileNotFoundError:
+                print('No path was entered or the file could not be found.')
+        # Unpickle the filepath using the handling module, turning it into a list.
+        # Then set the internal parse list to that unpickled information.
+
+        # When the pickleexport button is hit.
+        if event == 'pickleexport':
+            try:
+                outputloc = values['pickleout']+'/'+values['picklename']
+                handling.topickle(outputloc, guiqueue)
+                print('Saved pickled list of parsable information to {}, total'
+                      ' number of pages exported is {}.'.format(outputloc, len(inputList)))
+            except PermissionError:
+                print('Operation failed due to permission error. This could mean'
+                      ' that you do not have access to the file you are attempting to'
+                      ' export into, or that you failed to browse for a location entirely.')
+        # Combine the two fields that comprise folder and file name with a '/' and
+        # use handling.topickle to turn it into a list and then pickle it for later use.
+
+        # Whenever the genlayout button is hit on the trim page
+        if event == 'genlayout':
+            try:
+                trimdisplay = modparser.Parser(parselist).normalize(values['childrow'])
+                window['trimselection'].update(values=trimdisplay)
+            except IndexError:
+                sg.popup_ok('You have no stored data to trim.', title='Error',keep_on_top=True, no_titlebar=True, auto_close=True)
+                pass
+        # Use the modparser.Parser class and the normalize method to display the html information
+        # in a human readable form. If there is no data saved, raise an exception w/ window.
+
+        # When upselection (Update selection) is hit
+        if event == 'upselection':
+            window['selected'].update(value= '{} {}'.format(values['trimselection'][0][1],values['trimselection'][0][2]))
+        # Update the input text line with the information that the person selected in the boxlist thing
+
+        # End program when exit is hit.
         if event in (None, 'Exit'):
             break
 
+    # To ensure clean program exit
     window.close()
     del window
 

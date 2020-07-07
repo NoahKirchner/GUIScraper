@@ -12,7 +12,7 @@ def extract(queue:Queue):
     for i in range(len(list(queue.queue))):
         internal = queue.queue[i]
         if internal[3] is not None:
-            contentlist.append((internal[2],internal[3]))
+            contentlist.append([internal[2],internal[3]])
     return contentlist
 # Checks each value to make sure that the website had content and
 # then gets rid of logging information like status codes and connection time

@@ -25,15 +25,8 @@ def gui():
     activeExecutor = None
     # URL input list.
     inputList = None
-    # Bruh I don't remember @Todo remove this if it's not important
-    grabbable = False
     # The queue that the executor sessions use to send data back to the GUI thread
     guiqueue = Queue()
-    # List of data to parse, format [(URL, content)]
-    parselist = []
-    # The trimmed display output by modparser normalization method
-    # @Todo see if this can be removed by using return values
-    trimdisplay = []
 
     # Yarr, page layouts be here
     # @Todo reformat these so they're easier to look through
@@ -59,7 +52,7 @@ def gui():
                                     tooltip='Generates the list of URLs to scrape.')],
                          [sg.Frame(element_justification='center',
                                    title='Staged URLs', layout=[
-                                 [sg.Multiline(key='urloutput', do_not_clear=False, size=(54, 8))]]
+                                 [sg.Multiline(key='urloutput', do_not_clear=False, size=(54, 13))]]
                                    )]
                      ]),
 
@@ -73,7 +66,8 @@ def gui():
         [sg.Frame(element_justification='left',
                   title='Proxy Configuration', layout=[
                 [sg.T('Select the number of sessions/threads to create.', size=(20, 2))],
-                [sg.Slider(range=(1, 16), default_value=1, size=(20, 4), orientation='horizontal', key='number')],
+                [sg.Spin([i for i in range(1,17)], initial_value=1, key='number',
+                         text_color='black', background_color='white')],
                 [sg.T('Universal Timeout'),
                  sg.T('Universal Delay')],
                 [sg.Spin([i for i in range(121)], initial_value=5, text_color='black',
@@ -91,23 +85,22 @@ def gui():
          ],
         [sg.Frame(element_justification='center',
                   title='Staged Headers', layout=[
-                [sg.Multiline(key='headeroutput', do_not_clear=False, size=(56, 6))]])]
+                [sg.Multiline(key='headeroutput', do_not_clear=False, size=(56, 11))]])]
 
     ]
 
     # Where to execute the scraping based on the constructed executor class & list of URLs.
     # Also has the ability to import pickled list data
     scrapelayout = [
-        [sg.T('Scrape data from a list of URLs or import previously scraped data')],
+        [sg.T('Scrape the data and export as a pickled python object')],
         [sg.Frame(element_justification='right',
                   title='Scraping Progress', layout=[
-                [sg.InputText(size=(31, 1), key='picklein'),
-                 sg.FileBrowse('Browse'),
-                 sg.Button('Import', key='pickleimport'),
-                 sg.VerticalSeparator(),
-                 sg.Button('Scrape', key='scrape',
-                           tooltip='Begins scraping!')],
-                [sg.Output(key='scrapeout', size=(55, 17))],
+                [sg.Button('Scrape', key='scrape',
+                           tooltip='Begins scraping!'),
+                 sg.Button('Extract', key='extract',
+                           tooltip='Extract and reformat the raw scraped data.')
+                 ],
+                [sg.Output(key='scrapeout', size=(55, 18))],
                 [sg.InputText(size=(24, 1), key='pickleout'),
                 sg.InputText(size=(15, 1), key='picklename'),
                  sg.FolderBrowse('Browse', target='pickleout'),
@@ -116,42 +109,11 @@ def gui():
          ]
     ]
 
-    # Where you go to trim the data to make it more human readable later during parsing.
-    # Basically just selecting a parse_only= value in a beautifulsoup object lol
-    trimlayout = [
-        [sg.T('Trim down the page to a more manageable size.')],
-        [sg.Frame(title='Trimming', layout=[
-            [sg.Button('Update Layout', key='genlayout'),
-             sg.Spin([i for i in range(30)], initial_value=0, text_color='black',
-                     background_color='white', key='childrow',
-                     tooltip='How many element children do you want to see? Keep at 0 for all.'),
-             sg.InputText(size=(39, 1), key='selected')],
-            [sg.Button('Update Selection', key='upselection')],
-             [sg.Listbox(values=trimdisplay, key='trimselection', size=(56,16))
-             ]
-
-
-
-
-        ])]
-    ]
-
-    # @Todo parsing the trimmed data from above
-    parselayout = [
-        [sg.T('Choose what information you are going to parse.')]
-    ]
-
-    # @Todo decide the format by which the parsed data is displayed.
-    outputlayout = [
-        [sg.T('Select the format you would like to export your scraped information as.')]
-    ]
-
     # Aggregate all above layouts into one master page.
     masterlayout = [
         [sg.Button('Exit', tooltip='Bye! :)')],
         [sg.TabGroup([[sg.Tab('Input', inputlayout), sg.Tab('Connections', connectionlayout),
-                       sg.Tab('Scraping', scrapelayout), sg.Tab('Trimming', trimlayout),
-                       sg.Tab('Parsing', parselayout), sg.Tab('Output', outputlayout)]])],
+                       sg.Tab('Scraping', scrapelayout)]])],
 
     ]
     # End of page layouts
@@ -159,7 +121,7 @@ def gui():
     # Initialize window
     # @Todo toggleable grab_anywhere
     window = sg.Window('Scraper GUI', masterlayout,
-                       no_titlebar=True, grab_anywhere=grabbable, keep_on_top=True)
+                       no_titlebar=True, grab_anywhere=True, keep_on_top=True)
     # Event loop
     while True:
         event, values = window.read()
@@ -217,8 +179,9 @@ def gui():
             if message:
                 window.read()
         # Put all of the output into the guiqueue
-        #Todo you need to extract this data using handling at some point, remember
-        # to do that.
+
+        if event == 'extract':
+            parselist = handling.extract(guiqueue)
 
         # When pickleimport button is hit
         if event == 'pickleimport':
@@ -245,27 +208,11 @@ def gui():
         # Combine the two fields that comprise folder and file name with a '/' and
         # use handling.topickle to turn it into a list and then pickle it for later use.
 
-        # Whenever the genlayout button is hit on the trim page
-        if event == 'genlayout':
-            try:
-                trimdisplay = modparser.Parser(parselist).normalize(values['childrow'])
-                window['trimselection'].update(values=trimdisplay)
-            except IndexError:
-                sg.popup_ok('You have no stored data to trim.', title='Error',keep_on_top=True, no_titlebar=True, auto_close=True)
-                pass
-        # Use the modparser.Parser class and the normalize method to display the html information
-        # in a human readable form. If there is no data saved, raise an exception w/ window.
-
-        # When upselection (Update selection) is hit
-        if event == 'upselection':
-            window['selected'].update(value= '{} {}'.format(values['trimselection'][0][1],values['trimselection'][0][2]))
-        # Update the input text line with the information that the person selected in the boxlist thing
-
         # End program when exit is hit.
         if event in (None, 'Exit'):
             break
 
-    # To ensure clean program exit
+    # To ensure it all returns to nothing (and comes tumbling down, tumbling down, tumbling down)
     window.close()
     del window
 
